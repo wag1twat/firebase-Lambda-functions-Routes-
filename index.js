@@ -12,11 +12,11 @@ const resetMsgControll = require('./routes/resetMsgCountRoute')
 const updateMsgControll = require('./routes/updateMsgCountRoute')
 const getStaticUserControll = require('./routes/getMsgCountRoute')
 const sendPushNotificationControll = require('./routes/sendPushNotification')
-const updateVacNotifyCountControll = require('./routes/updateVacNotifyCountRoute')
 const createChats = require('./routes/createChats')
 const deleteChats = require('./routes/deleteChats')
 const addUserToChats = require('./routes/addUserToChat')
 const deleteUserFromChats = require('./routes/deleteUserFromChat')
+const resetUserDataFromUniService = require('./routes/resetUserDataFromUniService')
 //helpers
 const addMessageToChatAtId = require('./routes/__HELPERS')
 //forks
@@ -24,11 +24,11 @@ app.use('/reset/user/msg/count', resetMsgControll)
 app.use('/update/user/msg/count', updateMsgControll)
 app.use('/get/static/user', getStaticUserControll)
 app.use('/send/push/notification', sendPushNotificationControll)
-app.use('/update/vac/notify/count', updateVacNotifyCountControll)
 app.use('/create/chats', createChats)
 app.use('/delete/chats', deleteChats)
 app.use('/add/user/to/chats', addUserToChats)
 app.use('/delete/user/from/chats', deleteUserFromChats)
+app.use('/update/user/data/form/inu/service', resetUserDataFromUniService)
 //__HELPERS
 app.use(`/add/message/to/chat/at/id`, addMessageToChatAtId)
 
@@ -112,7 +112,7 @@ exports.notifications = functions
           UsersWithTokensFromChatWithOutSender
         )
         //=========================================================================//
-        /* await UpdateTotalUnReadMsg() */
+        await UpdateTotalUnReadMsg()
         //=========================================================================//
         await SendingPushNotify(
           UsersWithTokensFromChatWithOutSender,
@@ -232,6 +232,26 @@ const SendingPushNotify = async (
     const TotalUnReadMsg = await DB.ref(
       `ChatStatic/${User.Id}/TotalUnReadMsg`
     ).once('value')
+    const NotifyCount = await DB.ref(
+      `UserDataFromUniService/${User.Id}/NotifyCount`
+    ).once('value')
+    const VacCount = await DB.ref(
+      `UserDataFromUniService/${User.Id}/VacCount`
+    ).once('value')
+    let TotalUnReadMsgVal = TotalUnReadMsg.val()
+    let NotifyCountVal = NotifyCount.val()
+    let VacCountVal = VacCount.val()
+    TotalUnReadMsgVal = !isNaN(Number(TotalUnReadMsgVal))
+      ? Number(TotalUnReadMsgVal)
+      : 0
+    NotifyCountVal = !isNaN(Number(NotifyCountVal)) ? Number(NotifyCountVal) : 0
+    VacCountVal = !isNaN(Number(VacCountVal)) ? Number(VacCountVal) : 0
+    /*  */
+    console.log(`TotalUnReadMsgVal`, TotalUnReadMsgVal)
+    console.log(`NotifyCountVal`, NotifyCountVal)
+    console.log(`VacCountVal`, VacCountVal)
+    /*  */
+    const badge = NotifyCountVal + VacCountVal + TotalUnReadMsgVal
     admin
       .messaging()
       .sendToDevice(
@@ -240,7 +260,7 @@ const SendingPushNotify = async (
           ...payload,
           notification: {
             ...payload.notification,
-            badge: `${TotalUnReadMsg.val()}`,
+            badge: `${badge}`,
           },
         },
         options

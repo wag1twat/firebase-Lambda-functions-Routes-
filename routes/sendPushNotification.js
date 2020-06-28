@@ -4,7 +4,7 @@ const bodyParser = require('body-parser')
 const admin = require('firebase-admin')
 router.use(bodyParser.json())
 router.use(bodyParser.urlencoded({ extended: false }))
-const db = admin.database()
+const DB = admin.database()
 //helpers
 const convertBooleanString = (param) => {
   switch (param) {
@@ -18,17 +18,7 @@ const convertBooleanString = (param) => {
 }
 //middleware access denied
 router.use(async (request, response, next) => {
-  const user_id = request.body.user_id
-  let usersIds = []
-  await db.ref('Users').once('value', (snapshot) => {
-    snapshot.forEach((doc) => {
-      if (Number(doc.val().Id) === Number(user_id) && doc.val().Token) {
-        usersIds.push(doc.val().Id)
-      }
-    })
-  })
   if (
-    usersIds[0] &&
     request.body.user_id &&
     request.body.token &&
     request.body.title &&
@@ -71,20 +61,13 @@ router.post('/', async (request, response) => {
     is_has_new_project,
   } = request.body
   //
-  const ChatStatic = await admin
-    .database()
-    .ref(`ChatStatic/${user_id}`)
-    .once('value')
-  let badge = await Object.values(new Object(ChatStatic.val()))
-    .reduce((res, el) => {
-      el1 = el.User.countUnReadMsg
-      res.push(Number(el1))
-      el1 += Number(el.User.countUnReadMsg)
-      return res
-    }, [])
-    .reduce((acc, cur) => {
-      return acc + cur
-    }, 0)
+  const TotalUnReadMsg = await DB.ref(
+    `ChatStatic/${user_id}/TotalUnReadMsg`
+  ).once('value')
+  const TotalUnReadMsgVal = TotalUnReadMsg.val()
+  const badge = !isNaN(Number(TotalUnReadMsgVal))
+    ? Number(TotalUnReadMsgVal)
+    : 0
   //
   let options = {
     priority: 'high',
@@ -105,39 +88,24 @@ router.post('/', async (request, response) => {
     .sendToDevice(`${token}`, payload, options)
     .then(async (res) => {
       console.log('Successfully sent message:', res)
-      const key = (await admin.database().ref('Users').once('value')).forEach(
-        (doc) => {
-          if (doc.exists() && Number(doc.val().Id) === Number(user_id)) {
-            admin
-              .database()
-              .ref(`UserDataService/${doc.val().Id}`)
-              .update({
-                NotifyCount: notification_count,
-                VacCount: vacancy_count,
-                TotalUnReadMsg:
-                  Number(badge) +
-                  Number(notification_count) +
-                  Number(vacancy_count),
-                IsProjectCountChange: convertBooleanString(
-                  is_project_count_change
-                ),
-                IsHasNewProject: convertBooleanString(is_has_new_project),
-              })
-            admin
-              .database()
-              .ref('LogWeb')
-              .push({
-                date: Date(Date.now()).toString(),
-                method: '/send/push/notification',
-                request: request.body,
-              })
-          }
+      const key = (await DB.ref('Users').once('value')).forEach((doc) => {
+        if (doc.exists() && Number(doc.val().Id) === Number(user_id)) {
+          DB.ref(`UserDataFromUniService/${doc.val().Id}`).update({
+            NotifyCount: notification_count,
+            VacCount: vacancy_count,
+            IsProjectCountChange: convertBooleanString(is_project_count_change),
+            IsHasNewProject: convertBooleanString(is_has_new_project),
+          })
+          DB.ref('LogWeb').push({
+            date: Date(Date.now()).toString(),
+            method: '/send/push/notification',
+            request: request.body,
+          })
         }
-      )
+      })
       return response.status(200).json({
         method: 'send/push/notification',
         status: 'SUCCESS SEND PUSH NOTIFY',
-        ChatStatic: ChatStatic,
         key: key,
       })
     })
